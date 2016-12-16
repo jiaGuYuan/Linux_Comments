@@ -57,18 +57,14 @@ DEFINE_SPINLOCK(sb_lock);
 
 
 
- //所有超级块对象都以双向循环链表的形式链接在一起，量表中第一个元素用super_blocks变量表示，
- //而超级块对象的s_list字段存放指向链表?相邻元素的指针*/
- 
+ //所有超级块对象都以双向循环链表的形式链接在一起，链表的头由super_blocks全局变量表示，
+ //超级块对象通过s_list字段链入到链表中*/
 static struct super_block *alloc_super(struct file_system_type *type)
 {
+	struct super_block *s = kzalloc(sizeof(struct super_block),  GFP_USER);　//分配内存。并将初始化为零
+	static struct super_operations default_op;　//默认的超级块操作接口
 
-
-    /*从内存中申请sb*/
-	struct super_block *s = kzalloc(sizeof(struct super_block),  GFP_USER);
-	static struct super_operations default_op;
-
-	if (s) {
+	if (s) { //超级块分配成功
 		if (security_sb_alloc(s)) {
 			kfree(s);
 			s = NULL;
@@ -76,9 +72,9 @@ static struct super_block *alloc_super(struct file_system_type *type)
 		}
 		
 		/*初始化*/
-		INIT_LIST_HEAD(&s->s_dirty);//所有这个文件系统的脏的inode结构体都在这个队列上
-		INIT_LIST_HEAD(&s->s_io);   //所有这个文件系统的将要写入的inode都在这个队列上
-		INIT_LIST_HEAD(&s->s_files);//所有进程打开的文件集合
+		INIT_LIST_HEAD(&s->s_dirty);//这个文件系统的所有脏的inode结构体都在这个队列上
+		INIT_LIST_HEAD(&s->s_io);   //这个文件系统的所有将要回写的inode都在这个队列上
+		INIT_LIST_HEAD(&s->s_files);//进程打开的所有文件集合
 		INIT_LIST_HEAD(&s->s_instances);
 		INIT_HLIST_HEAD(&s->s_anon);//所有的远程网络文件系统匿名目录项的集合
 		INIT_LIST_HEAD(&s->s_inodes);//所有的这个文件系统的inode结构体都在这个队列上
@@ -92,8 +88,8 @@ static struct super_block *alloc_super(struct file_system_type *type)
 		 */
 		lockdep_set_class(&s->s_lock, &type->s_lock_key);
 		down_write(&s->s_umount);
-		s->s_count = S_BIAS;//引用计数
-		atomic_set(&s->s_active, 1);
+		s->s_count = S_BIAS;//超级块的引用计数
+		atomic_set(&s->s_active, 1);　
 		mutex_init(&s->s_vfs_rename_mutex);
 		mutex_init(&s->s_dquot.dqio_mutex);
 		mutex_init(&s->s_dquot.dqonoff_mutex);
@@ -208,7 +204,7 @@ void deactivate_super(struct super_block *s)
 EXPORT_SYMBOL(deactivate_super);
 
 /**
- *	grab_super - acquire an active reference
+ *	grab_super - 获取一个活动的超级块的引用
  *	@s: reference we are trying to make active
  *
  *	Tries to acquire an active reference.  grab_super() is used when we
@@ -218,23 +214,25 @@ EXPORT_SYMBOL(deactivate_super);
  *	success, 0 if we had failed (superblock contents was already dead or
  *	dying when grab_super() had been called).
  */
+ //将超级块的活动引用数s_active加１
+ //成功返回1，否则返回0。 －－调用这个函数之前应持有sb_lock锁
 static int grab_super(struct super_block *s)
 {
-	s->s_count++;
+	s->s_count++; //引用计数加1
 	spin_unlock(&sb_lock);
 	down_write(&s->s_umount);
-	if (s->s_root) {
+	if (s->s_root) { // 文件系统根目录对应的dentry存在
 		spin_lock(&sb_lock);
-		if (s->s_count > S_BIAS) {
-			atomic_inc(&s->s_active);
-			s->s_count--;
+		if (s->s_count > S_BIAS) {//引用计数大于S_BIAS，s_count初始化的时候值是S_BIAS
+			atomic_inc(&s->s_active); // 活动引用计数加1
+			s->s_count--; //引用计数减1
 			spin_unlock(&sb_lock);
-			return 1;
+			return 1; //成功获取一个活动引用，超级块s可用
 		}
 		spin_unlock(&sb_lock);
 	}
 	up_write(&s->s_umount);
-	put_super(s);
+	put_super(s); //这里引用计数也会减1，s_count的值一直是S_BIAS
 	yield();
 	return 0;
 }
@@ -292,12 +290,16 @@ void generic_shutdown_super(struct super_block *sb)
 EXPORT_SYMBOL(generic_shutdown_super);
 
 /**
- *	sget	-	find or create a superblock
- *	@type:	filesystem type superblock should belong to
- *	@test:	comparison callback
- *	@set:	setup callback
- *	@data:	argument to each of them
+ *	sget	-	查找(或创建)一个超级块
+ *	@type:	要查找的块所属的文件系统类型
+ *	@test:	用于判断的回调函数(它判断文件系统的超级块链表中的元素是否为我们要找的那个),它返回非0时，表示是我们要找的。
+ *	@set:	在没有找到满足条件的超级块时,sget函数将创建一个超级块，用于这个回调函数设置新创建的超级块
+ *	@data:	argument to each of them。作为比较函数test的参数,同时也作为set函数的参数。
+ *			(既然要在找不到时创建,那么这个创建的东西必然要满足查找的条件 ^_^)
  */
+ /*查找(或创建)一个超级块。
+   先在指定类型的文件系统的超级块链表中查找满足判断函数test的超级块--能使test返回非0的超级块，
+   如果找到了则将它返回，如果找不到创建一个超级块并用set函数进行设置后将其返回*/
 struct super_block *sget(struct file_system_type *type,
 			int (*test)(struct super_block *,void *),
 			int (*set)(struct super_block *,void *),
@@ -309,26 +311,36 @@ struct super_block *sget(struct file_system_type *type,
 
 retry:
 	spin_lock(&sb_lock);
-	if (test) list_for_each(p, &type->fs_supers) {
+			  
+	if (test) list_for_each(p, &type->fs_supers) {/*遍历文件系统的super_block链表*/
 		struct super_block *old;
 		old = list_entry(p, struct super_block, s_instances);
-		if (!test(old, data))//compare_single一直返回1
+
+		//判断old是否为我们要查找的超级块，不同类型的操作系统传入不同的比较函数
+		//对于s_flags 中的 FS_SINGLE 标志位为 1的文件系统，无论挂载多少次，都共享同一个超级块结构
+		//所以，这种类型的文件系统的test判断总是成立的。－－这种文件系统的超级块链表最多也只会有一个节点
+		if (!test(old, data)) //test()返回0，说明old不是我们要找的超级块，则continue进行下一次查找
 			continue;
-		if (!grab_super(old))
+
+		/***程序执行到这儿时,说明已经找到了我们要找的超级块,但是还需要做进一步的判断***/
+		if (!grab_super(old)) //将超级块的活动引用数s_active加１，调用它之前应持有sb_lock锁
 			goto retry;
-		if (s)
+		
+		if (s) //这里要与(@)联系起来看－－第二次查找时s为非NULL
 			destroy_super(s);
 		return old;
 	}
-	if (!s) {//没有找到
+	/*第一遍没有找到时,s为NULL,这个if条件成员-->创建一个超级块,此后s不再为NULL
+	  -->第二次查找(如果找到(说明不需要创建)则将刚才创建的超级块销毁)*/
+	if (!s) {
 		spin_unlock(&sb_lock);
-		s = alloc_super(type);//获取一个sb超级块的控制内存,同时做部分结构初始化
+		s = alloc_super(type);//获取一个sb超级块的控制内存,同时做部分结构初始化,未初始化的字段为零
 		if (!s)
 			return ERR_PTR(-ENOMEM);
-		goto retry;//继续尝试一次,看看是否重复了
+		goto retry;//(@)继续尝试一次,看看是否重复了
 	}
 		
-	err = set(s, data);//sysfs对应set_anon_super,获取一个sb超级块的设备号,major为0
+	err = set(s, data);//set回调函数对创建的超级块进行设置。
 	if (err) {
 		spin_unlock(&sb_lock);
 		destroy_super(s);
@@ -625,6 +637,7 @@ void emergency_remount(void)
 static struct idr unnamed_dev_idr;
 static DEFINE_SPINLOCK(unnamed_dev_lock);/* protects the above */
 
+//设置匿名的超级块--如:sysfs文件系统的超级块就是通过它设置的
 int set_anon_super(struct super_block *s, void *data)
 {
 	int dev;
@@ -801,11 +814,18 @@ int get_sb_nodev(struct file_system_type *fs_type,
 
 EXPORT_SYMBOL(get_sb_nodev);
 
+//这个函数用于FS_SINGLE 标志位为 1的文件系统, 在调用sget获取超级块作为比较函数(类似C++中标准算法的谓词)
+//这种文件系统无论挂载到多少个设备上，都共享同一个超级块，所以直接返回1就行了
 static int compare_single(struct super_block *s, void *p)
 {
 	return 1;
 }
 
+//获取一个超级块,如果之前已经创建了sb,那么这里将不再创建。
+/*如果文件系统的FS_SINGLE 标志位为 1，说明这个文件系统只有一个类型，也就是说，这是一种虚拟的文件系统类型。
+  这种文件类型在第一次挂载该类型的“设备”时 ，通过调用get_sb_single()创建一个超级块 super_block 结构后，
+  再安装的同类型设备就共享这个数据结构。sysfs文件系统就是这种类型。但是 Ext2 不是这样的文件系统类型,Ext2在每个具体设备上都有一个超级块。
+  (调用get_sb_single来获取超级块的文件系统，其fs_flags 的 FS_SINGLE 标志位肯定为 1)*/
 int get_sb_single(struct file_system_type *fs_type,
 	int flags, void *data,
 	int (*fill_super)(struct super_block *, void *, int),
@@ -813,15 +833,18 @@ int get_sb_single(struct file_system_type *fs_type,
 {
 	struct super_block *s;
 	int error;
-//获取超级块,如果之前已经创建了sb,那么这里将不再创建,将返回上一次创建的sb,所以这表明sb超级块将只被生成1个
-	s = sget(fs_type, compare_single, set_anon_super, NULL);
+
+
+	/*在fs_type类型的文件系统的超级块链表中查找满足判断函数compare_single的超级块(使它返回非0),
+	  如果没有找到则创建一个超级块并用set_anon_super设置这个超级块*/
+	s = sget(fs_type, compare_single, set_anon_super, NULL); 
 	if (IS_ERR(s))
 		return PTR_ERR(s);
-	if (!s->s_root) 
+	if (!s->s_root) //还未分配文件系统的根dentry--说明是第一次挂载该文件系统
 	{
-	//如果是第一次mount该sysfs文件系统,那么首先填充sb超级块
+		//填充sb超级块
 		s->s_flags = flags;
-		error = fill_super(s, data, flags & MS_SILENT ? 1 : 0);//这里对应sysfs_fill_super函数,细化sb超级块
+		error = fill_super(s, data, flags & MS_SILENT ? 1 : 0);//通过fill_super回调函数,来完成对超级块的填充
 		if (error) {
 			up_write(&s->s_umount);
 			deactivate_super(s);
@@ -829,12 +852,13 @@ int get_sb_single(struct file_system_type *fs_type,
 		}
 		s->s_flags |= MS_ACTIVE;
 	}
-	do_remount_sb(s, flags, data, 0);//asks filesystem to change mount options,在sysfs中sysfs_ops没有实现remount_fs
+	do_remount_sb(s, flags, data, 0);//asks filesystem to change mount options。文件系统挂载选项改变
 	return simple_set_mnt(mnt, s);//将s超级块安装到mnt这个mount节点上
 }
 
 EXPORT_SYMBOL(get_sb_single);
 
+//为文件系统申请必备的数据结构(vfsmount对象,根dentry,根inode)
 struct vfsmount *
 vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void *data)
 {
@@ -900,7 +924,7 @@ do_kern_mount(const char *fstype, int flags, const char *name, void *data)
 	return mnt;
 }
 
-//为文件系统申请必备的数据结构
+//为文件系统申请必备的数据结构(vfsmount对象,根dentry,根inode)
 struct vfsmount *kern_mount(struct file_system_type *type)
 {
 	return vfs_kern_mount(type, 0, type->name, NULL);

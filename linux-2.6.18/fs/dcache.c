@@ -220,14 +220,14 @@ kill_it: { //将dentry对象释放回给dentry_cache slab分配器缓存
  *
  * no dcache lock.
  */
- 
+ //使一个dcache中的dentry对象无效。该函数的核心就是要将指定的dentry对象从哈希链表中摘除
 int d_invalidate(struct dentry * dentry)
 {
 	/*
 	 * If it's already been dropped, return OK.
 	 */
 	spin_lock(&dcache_lock);
-	if (d_unhashed(dentry)) {
+	if (d_unhashed(dentry)) { //dentry没有链接在hash中
 		spin_unlock(&dcache_lock);
 		return 0;
 	}
@@ -235,9 +235,9 @@ int d_invalidate(struct dentry * dentry)
 	 * Check whether to do a partial shrink_dcache
 	 * to get rid of unused child entries.
 	 */
-	if (!list_empty(&dentry->d_subdirs)) {
+	if (!list_empty(&dentry->d_subdirs)) {//该dentry的子目录项非空时
 		spin_unlock(&dcache_lock);
-		shrink_dcache_parent(dentry);
+		shrink_dcache_parent(dentry);//释放LRU链表中以dentry为父目录项的子目录项对象
 		spin_lock(&dcache_lock);
 	}
 
@@ -326,6 +326,7 @@ static struct dentry * __d_find_alias(struct inode *inode, int want_discon)
 	return discon_alias;
 }
 
+//为指定inode对象查找一个位于哈希链表中的、且在该索引节点的别名链表i_dentry中的dentry对象
 struct dentry * d_find_alias(struct inode *inode)
 {
 	struct dentry *de = NULL;
@@ -825,13 +826,16 @@ struct dentry *d_alloc_name(struct dentry *parent, const char *name)
  * (or otherwise set) by the caller to indicate that it is now
  * in use by the dcache.
  */
- //将dentry加入到inode的dentry链表头
+ 
+ /*为一个目录项填充索引节点信息，建立起dentry与对应inode之间的关联.
+  在目录项中填充索引节点的信息。注意，这假定 inode 的count 域已由调用者增加， 
+  以表示 inode 正在由该目录项缓存使用*/
 void d_instantiate(struct dentry *entry, struct inode * inode)
 {
 	BUG_ON(!list_empty(&entry->d_alias));
 	spin_lock(&dcache_lock);
 	if (inode)
-		list_add(&entry->d_alias, &inode->i_dentry);
+		list_add(&entry->d_alias, &inode->i_dentry);//将dentry加入到inode的目录项链表的头部
 	entry->d_inode = inode;
 	fsnotify_d_instantiate(entry, inode);
 	spin_unlock(&dcache_lock);
@@ -900,19 +904,19 @@ EXPORT_SYMBOL(d_instantiate_unique);
  * instantiated and returned. %NULL is returned if there is insufficient
  * memory or the inode passed is %NULL.
  */
- //分配一个根dentry.
+ //分配一个根dentry.并建立起dentry与对应inode之间的关联.
 struct dentry * d_alloc_root(struct inode * root_inode)
 {
 	struct dentry *res = NULL;
 
 	if (root_inode) {
-		static const struct qstr name = { .name = "/", .len = 1 };
+		static const struct qstr name = { .name = "/", .len = 1 }; //根dentry的名字指定为'/'
 
-		res = d_alloc(NULL, &name);
+		res = d_alloc(NULL, &name); //分配一个dcache(dentry cache)条目
 		if (res) {
-			res->d_sb = root_inode->i_sb; 
-			res->d_parent = res; //父dentry指针指向自身
-			d_instantiate(res, root_inode);
+			res->d_sb = root_inode->i_sb; //指向文件系统的超级块对象
+			res->d_parent = res; //父dentry指针指向自身(**)
+			d_instantiate(res, root_inode);//为一个目录项填充索引节点信息，建立起dentry与对应inode之间的关联.
 		}
 	}
 	return res;
@@ -1434,6 +1438,7 @@ already_unhashed:
  *
  * "buflen" should be positive. Caller holds the dcache_lock.
  */
+ //得到一个dentry对象的全路径名
 static char * __d_path( struct dentry *dentry, struct vfsmount *vfsmnt,
 			struct dentry *root, struct vfsmount *rootmnt,
 			char *buffer, int buflen)
@@ -1681,7 +1686,7 @@ resume:
  * filesystems using synthetic inode numbers, and is necessary
  * to keep getcwd() working.
  */
- 
+ //在父目录dir中，查找是否存在参数name指定的名字的目录项，并返回对应inode的索引节点
 ino_t find_inode_number(struct dentry *dir, struct qstr *name)
 {
 	struct dentry * dentry;

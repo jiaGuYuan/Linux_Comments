@@ -120,11 +120,12 @@ static int init_symlink(struct inode * inode)
 	return 0;
 }
 
+//创建目录
 static int create_dir(struct kobject * k, struct dentry * p,
 		      const char * n, struct dentry ** d)
 {
 	int error;
-	umode_t mode = S_IFDIR| S_IRWXU | S_IRUGO | S_IXUGO;
+	umode_t mode = S_IFDIR| S_IRWXU | S_IRUGO | S_IXUGO;　//指定是一个目录操作
 
 	mutex_lock(&p->d_inode->i_mutex);
 	*d = lookup_one_len(n, p, strlen(n));
@@ -164,19 +165,20 @@ int sysfs_create_subdir(struct kobject * k, const char * n, struct dentry ** d)
 }
 
 /**
- *	sysfs_create_dir - create a directory for an object.
+ *	sysfs_create_dir - 为kobj对象创建一个目录。
  *	@parent:	parent parent object.
- *	@kobj:		object we're creating directory for. 
+ *	@kobj:		要创建目录的对象. 
  */
 
 int sysfs_create_dir(struct kobject * kobj)
 {
 	struct dentry * dentry = NULL;
-	struct dentry * parent;
+	struct dentry * parent; //父dentry
 	int error = 0;
 
 	BUG_ON(!kobj);
 
+	//设置父dentry,如果没有dentry,指定文件系统的root dentry为父dentry
 	if (kobj->parent)
 		parent = kobj->parent->dentry;
 	else if (sysfs_mount && sysfs_mount->mnt_sb)
@@ -184,6 +186,7 @@ int sysfs_create_dir(struct kobject * kobj)
 	else
 		return -EFAULT;
 
+	//完成目录的创建
 	error = create_dir(kobj,parent,kobject_name(kobj),&dentry);
 	if (!error)
 		kobj->dentry = dentry;

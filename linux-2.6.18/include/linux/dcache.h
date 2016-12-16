@@ -93,29 +93,30 @@ struct dcookie_struct;
 
 #define DNAME_INLINE_LEN_MIN 36
 
+//目录项
 struct dentry {
 	atomic_t d_count;
 	unsigned int d_flags;		/* protected by d_lock */
 	spinlock_t d_lock;		/* per dentry lock */
-	struct inode *d_inode;		/* Where the name belongs to - NULL is
-					 * negative */
+	struct inode *d_inode;	/* 指向对应的inode结构，inode与dentry共同描述一个普通文件或目录文件 */
+					 
 	/*
 	 * The next three fields are touched by __d_lookup.  Place them here
 	 * so they all fit in a cache line.
 	 */
-	struct hlist_node d_hash;	/* lookup hash list */
-	struct dentry *d_parent;	/* parent directory */
-	struct qstr d_name;
+	struct hlist_node d_hash;　/* 通过它将dentry链接到dentry cache的hash表，用于快速查找对应的dentry */
+	struct dentry *d_parent;   /* 指向父dentry结构 */
+	struct qstr d_name; //保存文件或目录的名字，打开一个文件的时候，通过它来搜寻目标文件
 
 	struct list_head d_lru;		/* LRU list */
 	/*
 	 * d_child and d_rcu can share memory
 	 */
 	union {
-		struct list_head d_child;	/* child of parent list */
+		struct list_head d_child;	/* 通过它将dentry链入到父dentry的d_subdirs字段 */
 	 	struct rcu_head d_rcu;
 	} d_u;
-	struct list_head d_subdirs;	/* our children */
+	struct list_head d_subdirs;	/* 该dentry的子项(可能是目录或文件)链表的表头--d_child与d_subdirs */
 	struct list_head d_alias;	/* inode alias list */
 	unsigned long d_time;		/* used by d_revalidate */
 	struct dentry_operations *d_op;
@@ -124,7 +125,7 @@ struct dentry {
 #ifdef CONFIG_PROFILING
 	struct dcookie_struct *d_cookie; /* cookie, if any */
 #endif
-	int d_mounted;
+	int d_mounted;　//指示dentry是否为一个挂载点
 	unsigned char d_iname[DNAME_INLINE_LEN_MIN];	/* small names */
 };
 
@@ -340,7 +341,7 @@ extern struct dentry * dget_locked(struct dentry *);
  *
  *	Returns true if the dentry passed is not currently hashed.
  */
-//测试dentry对象是否没有链接在哈希链表中 
+//当指定的dentry对象没有链接在哈希链表中时返回非零值 
 static inline int d_unhashed(struct dentry *dentry)
 {
 	return (dentry->d_flags & DCACHE_UNHASHED);

@@ -365,8 +365,8 @@ static inline void list_splice_init(struct list_head *list,
 
 /**
  * list_for_each	-	iterate over a list
- * @pos:	the &struct list_head to use as a loop cursor.
- * @head:	the head for your list.
+ * @pos:	用于遍历链表的游标,类型为链表节点的指针,the &struct list_head to use as a loop cursor.
+ * @head:	指向表头的指针。the head for your list.
  */
 #define list_for_each(pos, head) \
 	for (pos = (head)->next; prefetch(pos->next), pos != (head); \

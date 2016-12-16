@@ -34,14 +34,15 @@ struct namespace;
 #define MNT_UNBINDABLE	0x2000	/* if the vfsmount is a unbindable mount */
 #define MNT_PNODE_MASK	0x3000	/* propogation flag mask */
 
+//描述文件系统的挂载点
 struct vfsmount {
 	struct list_head mnt_hash;
-	struct vfsmount *mnt_parent;	/* fs we are mounted on */
-	struct dentry *mnt_mountpoint;	/* dentry of mountpoint */
-	struct dentry *mnt_root;	/* root of the mounted tree */
-	struct super_block *mnt_sb;	/* pointer to superblock */
-	struct list_head mnt_mounts;	/* list of children, anchored here */
-	struct list_head mnt_child;	/* and going through their mnt_child */
+	struct vfsmount *mnt_parent;	//指向挂载点的所在的目录所属的文件系统的挂载点/* fs we are mounted on */
+	struct dentry *mnt_mountpoint;	/*挂载点的目录项。 dentry of mountpoint */
+	struct dentry *mnt_root;	/* 挂载点所在的文件系统的根目录项。 root of the mounted tree */
+	struct super_block *mnt_sb;	/* 所挂载的文件系统的超级块  pointer to superblock */
+	struct list_head mnt_mounts;	/*通过它将该vfsmount链入到父文件系统的子链(mnt_child)中。 list of children, anchored here */
+	struct list_head mnt_child;	/*它维护该挂载文件系统中挂载的所有子文件系统。作为其下挂载的子文件系统的链表的根 and going through their mnt_child */
 	atomic_t mnt_count;
 	int mnt_flags;
 	int mnt_expiry_mark;		/* true if marked for expiry */

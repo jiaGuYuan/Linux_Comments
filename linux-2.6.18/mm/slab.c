@@ -2387,6 +2387,7 @@ EXPORT_SYMBOL(kmem_cache_shrink);
  * The caller must guarantee that noone will allocate memory from the cache
  * during the kmem_cache_destroy().
  */
+ //创建一个memory cache对象
 int kmem_cache_destroy(struct kmem_cache *cachep)
 {
 	int i;

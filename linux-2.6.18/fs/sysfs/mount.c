@@ -1,5 +1,7 @@
 /*
  * mount.c - operations for initializing and mounting sysfs.
+ * 初始化和装配sysfs文件系统的操作。
+
  */
 
 #define DEBUG 
@@ -31,23 +33,27 @@ static struct sysfs_dirent sysfs_root = {
 	.s_iattr	= NULL,
 };
 
+//sysfs_fill_super作为sysfs文件系统超级块的填充函数
+//由它来完成对超级块的填充
 static int sysfs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct inode *inode;
 	struct dentry *root;
 
+	//为超级块对象赋初值
 	sb->s_blocksize = PAGE_CACHE_SIZE;
 	sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
 	sb->s_magic = SYSFS_MAGIC;
-	sb->s_op = &sysfs_ops;
+	sb->s_op = &sysfs_ops; //为超级块对象赋予操作函数
 	sb->s_time_gran = 1;
 	sysfs_sb = sb;
 
+	//创建一个inode结构－－作为文件系统的根inode
 	inode = sysfs_new_inode(S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO,
 				 &sysfs_root);
 	if (inode) {
-		inode->i_op = &sysfs_dir_inode_operations;
-		inode->i_fop = &sysfs_dir_operations;
+		inode->i_op = &sysfs_dir_inode_operations; //为inode设置inode操作函数
+		inode->i_fop = &sysfs_dir_operations; //为inode设置文件操作函数
 		/* directory inodes start off with i_nlink == 2 (for "." entry) */
 		inode->i_nlink++;	
 	} else {
@@ -55,7 +61,7 @@ static int sysfs_fill_super(struct super_block *sb, void *data, int silent)
 		return -ENOMEM;
 	}
 
-	root = d_alloc_root(inode);
+	root = d_alloc_root(inode); //创建根dentry，并建立起dentry与对应inode之间的关联.
 	if (!root) {
 		pr_debug("%s: could not get root dentry!\n",__FUNCTION__);
 		iput(inode);
@@ -66,9 +72,11 @@ static int sysfs_fill_super(struct super_block *sb, void *data, int silent)
 	return 0;
 }
 
+//创建sysfs文件系统超级块对象
 static int sysfs_get_sb(struct file_system_type *fs_type,
 	int flags, const char *dev_name, void *data, struct vfsmount *mnt)
 {
+	//通过内核提供的get_sb_single创建超级块对象，sysfs_fill_super作为sysfs文件系统超级块的赋值函数
 	return get_sb_single(fs_type, flags, data, sysfs_fill_super, mnt);
 }
 
@@ -82,32 +90,24 @@ static struct file_system_type sysfs_fs_type = {
 
 
 
-
-
-
-
-
-
-
-//sysfs文件系统是一个排它式的文件系统,不论被mount多少次都只产生一个sb超级块,
-//如果尝试再次mount,即尝试再次调用sysfs_get_sb获取另一个sb超级块,那么将执行atomic_inc(old->s_active),增加
-//已被mount的引用计数,然后如果s已经执行了alloc_super,那么调用destroy_super将其销毁,然后返回这个已被mount了的
-//super_block超级块old,这样就实现了sysfs文件系统不论被mount多少次都只产生一个sb超级块的效果,所以取名为get_sb_single
-
-
+/*sysfs文件系统是一个排它式的文件系统(FS_SINGLE 标志位为 1),不论被mount多少次都只产生一个sb超级块,
+ 如果尝试再次mount,即尝试再次调用sysfs_get_sb获取另一个sb超级块,那么将执行atomic_inc(old->s_active),
+ 增加对应文件系统超级块的活动引用计数*/
 int __init sysfs_init(void)
 {
 	int err = -ENOMEM;
-//创建一个memory cache 对象
+	//创建一个memory cache 对象
 	sysfs_dir_cachep = kmem_cache_create("sysfs_dir_cache",
 					      sizeof(struct sysfs_dirent),
 					      0, 0, NULL, NULL);
 	if (!sysfs_dir_cachep)
 		goto out;
 
+	//注册一个文件系统(将其加入到系统的文件系统链表file_system)
 	err = register_filesystem(&sysfs_fs_type);
 	if (!err) {
-		sysfs_mount = kern_mount(&sysfs_fs_type);
+		//为文件系统申请必备的数据结构(vfsmount对象,根dentry,根inode)
+		sysfs_mount = kern_mount(&sysfs_fs_type); 
 		if (IS_ERR(sysfs_mount)) {
 			printk(KERN_ERR "sysfs: could not mount!\n");
 			err = PTR_ERR(sysfs_mount);
@@ -120,7 +120,7 @@ int __init sysfs_init(void)
 out:
 	return err;
 out_err:
-	kmem_cache_destroy(sysfs_dir_cachep);
+	kmem_cache_destroy(sysfs_dir_cachep); //销毁一个memory cache对象
 	sysfs_dir_cachep = NULL;
 	goto out;
 }

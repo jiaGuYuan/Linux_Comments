@@ -1466,6 +1466,7 @@ static struct dentry *lookup_hash(struct nameidata *nd)
 }
 
 /* SMP-safe */
+//在dcache(dentry cache)中查找名为name的dentry
 struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
 {
 	unsigned long hash;

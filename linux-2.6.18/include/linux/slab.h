@@ -157,9 +157,9 @@ found:
 extern void *__kzalloc(size_t, gfp_t);
 
 /**
- * kzalloc - allocate memory. The memory is set to zero.
- * @size: how many bytes of memory are required.
- * @flags: the type of memory to allocate (see kmalloc).
+ * kzalloc - 分配内存。并将初始化为零
+ * @size: 需要多少字节的内存。.
+ * @flags: 内存分配的类型(见kmalloc)。
  */
 static inline void *kzalloc(size_t size, gfp_t flags)
 {

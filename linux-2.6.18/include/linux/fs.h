@@ -852,45 +852,45 @@ extern int send_sigurg(struct fown_struct *fown);
 #define MNT_DETACH	0x00000002	/* Just detach from the tree */
 #define MNT_EXPIRE	0x00000004	/* Mark for expiry */
 
-extern struct list_head super_blocks;
+extern struct list_head super_blocks; //超级块链表的表头
 extern spinlock_t sb_lock;
 
 #define sb_entry(list)	list_entry((list), struct super_block, s_list)
 #define S_BIAS (1<<30)
 
-//超级块
+//超级块--描述文件系统
 struct super_block {
 	struct list_head	s_list;		/* Keep this first */
 	dev_t			s_dev;		/* search index; _not_ kdev_t */
-	unsigned long		s_blocksize;
-	unsigned char		s_blocksize_bits;
+	unsigned long		s_blocksize;  //文件系统块的大小 
+	unsigned char		s_blocksize_bits; //文件系统块大小的位数(如块大小为4K时，该值为12)
 	unsigned char		s_dirt;
-	unsigned long long	s_maxbytes;	/* Max file size */
-	struct file_system_type	*s_type;
-	struct super_operations	*s_op;
+	unsigned long long	s_maxbytes;	/* 最大文件的尺寸 */
+	struct file_system_type	*s_type;  //指向描述文件系统类型的结构体的指针
+	struct super_operations	*s_op;	//提供了对超级块的操作
 	struct dquot_operations	*dq_op;
  	struct quotactl_ops	*s_qcop;
 	struct export_operations *s_export_op;
 	unsigned long		s_flags;
-	unsigned long		s_magic;
-	struct dentry		*s_root;
+	unsigned long		s_magic;	//魔术数字，每个文件系统都有一个魔术数字
+	struct dentry		*s_root;	//指向文件系统的根dentry/*指向具体文件系统安装点的目录项*/
 	struct rw_semaphore	s_umount;
 	struct mutex		s_lock;
-	int			s_count;
+	int			s_count;　　/*对超级块的使用计数*/　//s_count字段与s_active字段的不同
 	int			s_syncing;
 	int			s_need_sync_fs;
 	atomic_t		s_active;
 	void                    *s_security;
 	struct xattr_handler	**s_xattr;
 
-	struct list_head	s_inodes;	/* all inodes */
-	struct list_head	s_dirty;	/* dirty inodes */
-	struct list_head	s_io;		/* parked for writeback */
-	struct hlist_head	s_anon;		/* anonymous dentries for (nfs) exporting */
+	struct list_head	s_inodes;	/* 指向文件系统内所有的inode(双向链表)，可以通过它遍历inode对象 */
+	struct list_head	s_dirty;	/* 指向所有dirty的inode对象 */
+	struct list_head	s_io;		/* 存放文件系统的将要回写的所有inode(的链表)。 */
+	struct hlist_head	s_anon;		/* 匿名文件系统(nfs)的超级块所构成的链表。anonymous dentries for (nfs) exporting */
 	struct list_head	s_files;
 
-	struct block_device	*s_bdev;
-	struct list_head	s_instances;
+	struct block_device	*s_bdev;	//指向文件系统存在的块设备
+	struct list_head	s_instances; //通过它将超级块对象链入到超级块链表中
 	struct quota_info	s_dquot;	/* Diskquota specific options */
 
 	int			s_frozen;
@@ -1309,14 +1309,18 @@ find_exported_dentry(struct super_block *sb, void *obj, void *parent,
 		     int (*acceptable)(void *context, struct dentry *de),
 		     void *context);
 
+//描述文件系统类型
 struct file_system_type {
 	const char *name;
 	int fs_flags;
 	int (*get_sb) (struct file_system_type *, int,const char *, void *, struct vfsmount *);
 	void (*kill_sb) (struct super_block *);
 	struct module *owner;
-	struct file_system_type * next;
-	struct list_head fs_supers;
+	struct file_system_type * next; //用于将文件系统链入文件系统链表file_system中
+
+	/*fs_supers维护了文件系统的超级块链表。每个文件系统都有一个超级块,但有些文件系统可能被安装
+	  在不同的设备上，而且每个具体的设备都有一个超级块,这些超级块就形成一个双向链表。*/
+	struct list_head fs_supers;	//指向文件系统的超级块链表
 	struct lock_class_key s_lock_key;
 	struct lock_class_key s_umount_key;
 };
